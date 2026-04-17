@@ -991,6 +991,33 @@
       master: { size: 9, range: 81, target: 120, name: '大师', class: 'hard' }
     };
 
+    // 时间效率奖励等级
+    const TIME_RATING = {
+      LEGEND: { min: 8, emoji: '⚡', text: '传说', color: '#FFD700' },
+      EPIC: { min: 6, emoji: '💥', text: '史诗', color: '#9B59B6' },
+      RARE: { min: 4, emoji: '🌟', text: '稀有', color: '#3498DB' },
+      GOOD: { min: 2, emoji: '👍', text: '不错', color: '#27AE60' },
+      OK: { min: 0, emoji: '💪', text: '加油', color: '#95A5A6' }
+    };
+
+    // 计算时间效率奖励
+    function calcTimeBonus(elapsed, target, level) {
+      if (elapsed > target) return { bonus: 0, rating: TIME_RATING.OK, saved: 0 };
+
+      const saved = target - elapsed; // 节省的秒数
+      const step = { easy: 5, medium: 4, hard: 3, expert: 2, master: 1 };
+      const bonus = Math.min(8, Math.floor(saved / step[level]));
+
+      let rating;
+      if (bonus >= 8) rating = TIME_RATING.LEGEND;
+      else if (bonus >= 6) rating = TIME_RATING.EPIC;
+      else if (bonus >= 4) rating = TIME_RATING.RARE;
+      else if (bonus >= 2) rating = TIME_RATING.GOOD;
+      else rating = TIME_RATING.OK;
+
+      return { bonus, rating, saved };
+    }
+
     // ===== 初始化 =====
     function init() {
       updateUI();
@@ -1233,6 +1260,10 @@
       // 计算小红花奖励
       let flowerReward = 1; // 完成基础奖励
 
+      // 时间效率奖励
+      const timeResult = calcTimeBonus(elapsed, config.target, currentLevel);
+      flowerReward += timeResult.bonus;
+
       // 检查新纪录
       const isNewRecord = !gameData.bestRecords[currentLevel] ||
                           elapsed < gameData.bestRecords[currentLevel].time;
@@ -1294,10 +1325,10 @@
       saveData(gameData);
 
       // 显示结果弹窗
-      showResultModal(elapsed, errorCount, flowerReward, isNewRecord, achievedTarget, zeroError, isFirstPlayToday);
+      showResultModal(elapsed, errorCount, flowerReward, isNewRecord, achievedTarget, zeroError, isFirstPlayToday, timeResult);
     }
 
-    function showResultModal(time, errors, flowers, isNewRecord, achievedTarget, zeroError, isFirstPlayToday) {
+    function showResultModal(time, errors, flowers, isNewRecord, achievedTarget, zeroError, isFirstPlayToday, timeResult) {
       const config = LEVEL_CONFIG[currentLevel];
 
       document.getElementById('modal-level-name').textContent = config.name + '挑战';
@@ -1315,9 +1346,10 @@
 
       const achievements = [];
       if (isNewRecord) achievements.push('🏆');
-      if (achievedTarget) achievements.push('⭐');
       if (zeroError) achievements.push('💯');
       if (gameData.streak >= 3) achievements.push('🔥');
+      // 时间评级
+      if (timeResult.bonus >= 4) achievements.push(timeResult.rating.emoji);
 
       achievements.forEach(a => {
         const span = document.createElement('span');
@@ -1334,10 +1366,10 @@
       createFlowerBurst(flowers);
 
       // 显示奖励详情
-      showFlowerBreakdown(isFirstPlayToday);
+      showFlowerBreakdown(isFirstPlayToday, timeResult);
     }
 
-    function showFlowerBreakdown(isFirstPlayToday) {
+    function showFlowerBreakdown(isFirstPlayToday, timeResult) {
       // 创建或更新奖励详情区域
       let breakdownEl = document.getElementById('flower-breakdown');
       if (!breakdownEl) {
@@ -1351,7 +1383,6 @@
 
       const config = LEVEL_CONFIG[currentLevel];
       const elapsed = Math.floor((Date.now() - startTime) / 1000);
-      const achievedTarget = elapsed <= config.target;
       const zeroError = errorCount === 0;
       const isNewRecord = !gameData.bestRecords[currentLevel] ||
                           elapsed < gameData.bestRecords[currentLevel].time;
@@ -1359,11 +1390,16 @@
       let html = '<div style="font-weight: bold; margin-bottom: 8px; color: #FF69B4;">奖励明细</div>';
       html += `<div>✓ 完成挑战 <span style="color: var(--success)">+1</span></div>`;
 
+      // 时间效率奖励
+      if (timeResult.bonus > 0) {
+        const saved = config.target - elapsed;
+        html += `<div>${timeResult.rating.emoji} ${timeResult.rating.text} (节省${saved}秒) <span style="color: var(--success)">+${timeResult.bonus}</span></div>`;
+      } else {
+        html += `<div>⏱️ 超过目标 <span style="color: var(--danger)">+0</span></div>`;
+      }
+
       if (isNewRecord) {
         html += `<div>🏆 打破纪录 <span style="color: var(--success)">+5</span></div>`;
-      }
-      if (achievedTarget) {
-        html += `<div>⭐ 达标 (< ${config.target}秒) <span style="color: var(--success)">+1</span></div>`;
       }
       if (zeroError) {
         html += `<div>💯 零错误 <span style="color: var(--success)">+2</span></div>`;
